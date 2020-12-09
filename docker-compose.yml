@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  api:
+    container_name: profiler-buddy
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+  deploy:
+    container_name: profiler-buddy-deploy
+    build: .

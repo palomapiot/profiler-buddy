@@ -1,0 +1,43 @@
+image: docker:latest
+
+services:
+  - docker:dind
+
+.before_script_template:
+  before_script:
+    # Add Docker-compose to Docker image
+    - apk add --no-cache py-pip
+    - pip install docker-compose==1.23.2
+    - docker info
+    - docker-compose --version
+
+stages:
+  - build
+  - deploy
+
+variables:
+    CONTAINER_IMAGE: $REGISTRY_NAME:$CI_BUILD_REF_NAME
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+
+build:
+  stage: build
+  extends: .before_script_template
+  script:
+    - echo "Building the app"
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
+    - docker build -t $CONTAINER_IMAGE .
+    - docker push $CONTAINER_IMAGE
+
+deploy:
+  stage: deploy
+  extends: .before_script_template
+  only:
+  - develop
+  script:
+    - echo "Deploying the app"
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
+    - docker login --username=_ --password=$HEROKU_API_KEY registry.heroku.com
+    - docker pull $CONTAINER_IMAGE
+    - docker tag $CONTAINER_IMAGE registry.heroku.com/$HEROKU_APP/api
+    - docker push registry.heroku.com/$HEROKU_APP/api
+    - docker run --rm -e HEROKU_API_KEY=$HEROKU_API_KEY wingrunr21/alpine-heroku-cli container:release api --app $HEROKU_APP
