@@ -40,4 +40,8 @@ def home():
     return Response({'result': 'OK', 'gender': gender}, status=HTTP_200_OK)
     return jsonify(data['comments'])
 
+@app.route('/', methods=['GET'])
+def home():
+    return "<h1>Profiler Buddy</h1>"
+
 app.run(host='0.0.0.0')
