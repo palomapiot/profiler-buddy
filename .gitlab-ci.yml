@@ -7,4 +7,3 @@ buildjob:
     - docker build -t piottt/profiler-buddy:latest .
     - docker image push piottt/profiler-buddy:latest 
     - aws ecs update-service --cluster profilerbuddycluster --service profiler-buddy-service --force-new-deployment
-

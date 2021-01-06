@@ -1,4 +1,3 @@
-# TODO: delete me
 import os
 import pandas as pd
 import emoji
