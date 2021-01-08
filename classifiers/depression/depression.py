@@ -1,52 +1,41 @@
+import numpy as np
+import os 
 import tensorflow as tf
 import tensorflow_hub as hub
+from tensorflow.keras.models import load_model
 
+from official.nlp import optimization
 from official.nlp.bert.tokenization import FullTokenizer
-import numpy as np
+from pyemd import emd
+import gensim.downloader as api
 
-### Model ###
-class BertSquadLayer(tf.keras.layers.Layer):
+DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
-  def __init__(self):
-    super(BertSquadLayer, self).__init__()
-    self.final_dense = tf.keras.layers.Dense(
-        units=2,
-        kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02))
+NB_BATCHES_TRAIN = 2000
+INIT_LR = 5e-5 # initial learning rate
+WARMUP_STEPS = int(NB_BATCHES_TRAIN * 0.1) 
 
-  def call(self, inputs):
-    logits = self.final_dense(inputs) # (batch_size, seq_len, 2)
+def squad_loss_fn(labels, model_outputs):
+    start_positions = labels['start_positions']
+    end_positions = labels['end_positions']
+    start_logits, end_logits = model_outputs
 
-    logits = tf.transpose(logits, [2, 0, 1]) # (2, batch_size, seq_len)
-    unstacked_logits = tf.unstack(logits, axis=0) # [(batch_size, seq_len), (batch_size, seq_len)] 
-    return unstacked_logits[0], unstacked_logits[1]
-
-class BERTSquad(tf.keras.Model):
+    start_loss = tf.keras.backend.sparse_categorical_crossentropy(
+        start_positions, start_logits, from_logits=True)
+    end_loss = tf.keras.backend.sparse_categorical_crossentropy(
+        end_positions, end_logits, from_logits=True)
     
-    def __init__(self,
-                 name="bert_squad"):
-        super(BERTSquad, self).__init__(name=name)
-        
-        # in a prod env, pick the large bert
-        self.bert_layer = hub.KerasLayer(
-            "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-            trainable=True)
-        
-        self.squad_layer = BertSquadLayer()
-    
-    def apply_bert(self, inputs):
-        _ , sequence_output = self.bert_layer([inputs["input_word_ids"],
-                                               inputs["input_mask"],
-                                               inputs["input_type_ids"]])
-        return sequence_output
+    total_loss = (tf.reduce_mean(start_loss) + tf.reduce_mean(end_loss)) / 2
 
-    def call(self, inputs):
-        seq_output = self.apply_bert(inputs)
+    return total_loss
 
-        start_logits, end_logits = self.squad_layer(seq_output)
-        
-        return start_logits, end_logits
+optimizer = optimization.create_optimizer(
+    init_lr=INIT_LR,
+    num_train_steps=NB_BATCHES_TRAIN,
+    num_warmup_steps=WARMUP_STEPS)
 
-bert_squad = BERTSquad()
+bert_squad = load_model(DIR_PATH + '/bert_squad_model', compile=False)
+bert_squad.compile(optimizer, squad_loss_fn)
 
 ### Prediction Utils ###
 my_bert_layer = hub.KerasLayer(
@@ -133,6 +122,25 @@ def create_input_dict(question, context):
 
     return input_dict, context_words, context_tok_to_word_id, len(question_tok)
 
+### Similarity between the answers and the predicted answer ###
+
+word_vectors = api.load("glove-wiki-gigaword-100")
+def find_best_answer(predicted_answer, answers, is_special):
+    similarities = []
+    for answer in answers:
+        similarities.append(word_vectors.wmdistance(predicted_answer, answer))
+    # lowest wmd, more similar
+    idx = similarities.index(min(similarities))
+    # return idx (question value)
+    if is_special == True:
+        if idx == 1 or idx == 2:
+            idx = 1
+        elif idx == 3 or idx == 4:
+            idx = 2
+        elif idx == 5 or idx == 6:
+            idx = 3
+    return idx
+
 ### Questions ###
 
 questions = {
@@ -159,26 +167,71 @@ questions = {
     21: '''Are you interested in sex?''' # Loss of Interest in Sex
 }
 
-def find_answers(my_context):
-    answers = {}
+questions_answers = {
+    1: ["I do not feel sad", "I feel sad much of the time", "I am sad all the time", "I am so sad or unhappy that I can't stand it"], # Sadness
+    2: ["I am not discouraged about my future", "I feel more discouraged about my future than I used to be", "I do not expect things to work out for me", "I feel my future is hopeless and will only get worse"], # Pessimism
+    3: ["I do not feel like a failure", "I have failed more than I should have", "As I look back, I see a lot of failures", "I feel I am a total failure as a person"],
+    4: [" get as much pleasure as I ever did from the things I enjoy", "I don't enjoy things as much as I used to", "I get very little pleasure from the things I used to enjoy", "I can't get any pleasure from the things I used to enjoy"], # Loss of pleasure
+    5: ["I don't feel particularly guilty", "I feel guilty over many things I have done or should have done", "I feel quite guilty most of the time", "I feel guilty all of the time"], # Guilty Feelings
+    6: ["I don't feel I am being punished", "I feel I may be punished", "I expect to be punished", "I feel I am being punished"], # Punishment Feelings
+    7: ["I feel the same about myself as ever", "I have lost confidence in myself", "I am disappointed in myself", "I dislike myself"], # Self-Dislike -> both works
+    8: ["I don't criticize or blame myself more than usual", "I am more critical of myself than I used to be", "I criticize myself for all of my faults", "I blame myself for everything bad that happens"], # Self-Criticalness
+    9: ["I don't have any thoughts of killing myself", "I have thoughts of killing myself, but I would not carry them out", "I would like to kill myself", "I would kill myself if I had the chance"], # Suicidal Thoughts or Wishes
+    10: ["I don't cry anymore than I used to", "I cry more than I used to", "I cry over every little thing", "I feel like crying, but I can't"], # Crying
+    11: ["I am no more restless or wound up than usual", "I feel more restless or wound up than usual", "I am so restless or agitated that it's hard to stay still", "I am so restless or agitated that I have to keep moving or doing something"], # Agitation
+    12: ["I have not lost interest in other people or activities", "I am less interested in other people or things than before", "I have lost most of my interest in other people or things", "It's hard to get interested in anything"], # Loss of Interest
+    13: ["I make decisions about as well as ever", "I find it more difficult to make decisions than usual", "I have much greater difficulty in making decisions than I used to", "I have trouble making any decisions"], # Indecisiveness
+    14: ["I do not feel I am worthless", "I don't consider myself as worthwhile and useful as I used to", "I feel more worthless as compared to other people", "I feel utterly worthless"], # Worthlessness
+    15: ["I have as much energy as ever", "I have less energy than I used to have", "I don't have enough energy to do very much", "I don't have enough energy to do anything"], # Loss of Energy
+    16: ["I have not experienced any change in my sleeping pattern", "I sleep somewhat more than usual", "I sleep somewhat less than usual", "I sleep a lot more than usual", "I sleep a lot less than usual", "I sleep most of the day", "I wake up 1-2 hours early and can't get back to sleep"], # Changes in Sleeping Pattern
+    17: ["I am no more irritable than usual", "I am more irritable than usual", "I am much more irritable than usual", "I am irritable all the time"], # Irritability
+    18: ["I have not experienced any change in my appetite", "My appetite is somewhat less than usual", "My appetite is somewhat greater than usual", "My appetite is much less than before", "My appetite is much greater than usual", "I have no appetite", "I crave food all the time"], # Changes in Appetite
+    19: ["I can concentrate as well as ever", "I can't concentrate as well as usual", "It's hard to keep my mind on anything for very long", "I find I can't concentrate on anything"], # Concentration Difficulty
+    20: ["I am no more tired or fatigued than usual", "I get more tired or fatigued more easily than usual", "I am too tired or fatigued to do a lot of the things I used to do", "I am too tired or fatigued to do most of the things I used to do"], # Tiredness or Fatigue
+    21: ["I have not noticed any recent change in my interest in sex", "I am less interested in sex than I used to be", "I am much less interested in sex now", "I have lost interest in sex completely at all"] # Loss of Interest in Sex
+}
+
+def find_answers(comments):
+    answers = {
+        "questionnaire": {},
+        "questionnaire_reasons": {}
+    }
     for idx in range(1, 22):
-        # creation
         my_question = questions[idx]
-        my_input_dict, my_context_words, context_tok_to_word_id, question_tok_len = create_input_dict(my_question, my_context)
-        # prediction
-        start_logits, end_logits = bert_squad(my_input_dict, training=False)
-        # remove the ids corresponding to the question and the ["SEP"] token
-        start_logits_context = start_logits.numpy()[0, question_tok_len+1:]
-        end_logits_context = end_logits.numpy()[0, question_tok_len+1:]
-        # interpretation
-        pair_scores = np.ones((len(start_logits_context), len(end_logits_context)))*(-1E10)
-        for i in range(len(start_logits_context-1)):
-            for j in range(i, len(end_logits_context)):
-                pair_scores[i, j] = start_logits_context[i] + end_logits_context[j]
-        pair_scores_argmax = np.argmax(pair_scores)
-        start_word_id = context_tok_to_word_id[pair_scores_argmax // len(start_logits_context)]
-        end_word_id = context_tok_to_word_id[pair_scores_argmax % len(end_logits_context)]
-        # answer
-        predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
-        answers[idx] = predicted_answer
+        for my_context in comments:
+            # creation
+            my_input_dict, my_context_words, context_tok_to_word_id, question_tok_len = create_input_dict(my_question, my_context)
+            # prediction
+            start_logits, end_logits = bert_squad(my_input_dict, training=False)
+            # remove the ids corresponding to the question and the ["SEP"] token
+            start_logits_context = start_logits.numpy()[0, question_tok_len+1:]
+            end_logits_context = end_logits.numpy()[0, question_tok_len+1:]
+            # interpretation
+            pair_scores = np.ones((len(start_logits_context), len(end_logits_context)))*(-1E10)
+            for i in range(len(start_logits_context-1)):
+                for j in range(i, len(end_logits_context)):
+                    pair_scores[i, j] = start_logits_context[i] + end_logits_context[j]
+            pair_scores_argmax = np.argmax(pair_scores)
+            # ensure that the conterxt is inside our context
+            if len(context_tok_to_word_id) > pair_scores_argmax // len(start_logits_context) and len(context_tok_to_word_id) > pair_scores_argmax % len(end_logits_context):
+                start_word_id = context_tok_to_word_id[pair_scores_argmax // len(start_logits_context)]
+                end_word_id = context_tok_to_word_id[pair_scores_argmax % len(end_logits_context)]
+            else:
+                start_word_id = 0
+                end_word_id = 0
+            # answer context
+            predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
+            marked_text = str(my_context.replace(predicted_answer, f"<strong>{predicted_answer}</strong>"))
+            # set the higher pair_scores_argmax to question
+            questionnaire = answers["questionnaire"]
+            q_idx = 'q' + str(idx)
+            if q_idx not in questionnaire.keys() or pair_scores_argmax > int(questionnaire[q_idx]["score"]):
+                questionnaire[q_idx] = {"context": marked_text, "score": str(pair_scores_argmax)}
+        # get most similar answer
+        is_special = False
+        if idx == 16 or idx == 18:
+            is_special = True
+        questionnaire_answer = find_best_answer(predicted_answer, questions_answers[idx], is_special)
+        answers["questionnaire_reasons"][q_idx] = questionnaire_answer
+    answers["questionnaire"] = questionnaire
     return answers

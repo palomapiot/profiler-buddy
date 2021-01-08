@@ -2,8 +2,9 @@ import flask
 import os
 import pickle
 import lightgbm
+from status import HTTP_200_OK
 
-from flask import request, jsonify
+from flask import request, jsonify, Response
 from preprocessing.preprocessing import preprocess
 from classifiers.depression.depression import find_answers
 
@@ -26,8 +27,11 @@ def profile():
 def fill_questionnaire():
     data = request.get_json() or {}
     comments = [x['comment'] for x in data['comments']]
-    questionnaire = find_answers(' '.join(comments))
-    return Response({'result': 'OK', 'questionnaire': questionnaire}, status=HTTP_200_OK)
+    questionnaire = find_answers(comments)
+    print(jsonify(questionnaire))
+    #questionnaire = find_answers('\n\n'.join(comments))
+    data = jsonify(questionnaire)
+    return data
 
 @app.route('/', methods=['GET'])
 def home():
