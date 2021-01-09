@@ -133,13 +133,19 @@ def find_best_answer(predicted_answer, answers, is_special):
     idx = similarities.index(min(similarities))
     # return idx (question value)
     if is_special == True:
-        if idx == 1 or idx == 2:
-            idx = 1
-        elif idx == 3 or idx == 4:
-            idx = 2
-        elif idx == 5 or idx == 6:
-            idx = 3
-    return idx
+        if idx == 1: 
+            idx = "1a"
+        elif idx == 2:
+            idx = "1b"
+        elif idx == 3:
+            idx = "2a"
+        elif idx == 4:
+            idx = "2b"
+        elif idx == 5:
+            idx = "3a"
+        elif idx == 6:
+            idx = "3b"
+    return str(idx)
 
 ### Questions ###
 
