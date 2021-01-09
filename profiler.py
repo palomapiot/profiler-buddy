@@ -17,7 +17,7 @@ app.config["DEBUG"] = True
 def profile():
     print('profile call')
     data = request.get_json() or {}
-    comments = [x['comment'] for x in data['comments']]
+    comments = [x['text'] for x in data['comments']]
     df = preprocess(data['experiment_id'], ' '.join(comments))
     
     # predict
@@ -28,10 +28,8 @@ def profile():
 def fill_questionnaire():
     print('fill questionnaire call')
     data = request.get_json() or {}
-    comments = [x['comment'] for x in data['comments']]
+    comments = [x['text'] for x in data['comments']]
     questionnaire = find_answers(comments)
-    print(jsonify(questionnaire))
-    #questionnaire = find_answers('\n\n'.join(comments))
     data = jsonify(questionnaire)
     return data
 

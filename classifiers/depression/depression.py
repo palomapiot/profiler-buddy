@@ -223,7 +223,7 @@ def find_answers(comments):
             predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
             marked_text = str(my_context.replace(predicted_answer, f"<strong>{predicted_answer}</strong>"))
             # set the higher pair_scores_argmax to question
-            questionnaire = answers["questionnaire"]
+            questionnaire = answers["questionnaire_reasons"]
             q_idx = 'q' + str(idx)
             if q_idx not in questionnaire.keys() or pair_scores_argmax > int(questionnaire[q_idx]["score"]):
                 questionnaire[q_idx] = {"context": marked_text, "score": str(pair_scores_argmax)}
