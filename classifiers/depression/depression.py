@@ -232,6 +232,6 @@ def find_answers(comments):
         if idx == 16 or idx == 18:
             is_special = True
         questionnaire_answer = find_best_answer(predicted_answer, questions_answers[idx], is_special)
-        answers["questionnaire_reasons"][q_idx] = questionnaire_answer
-    answers["questionnaire"] = questionnaire
+        answers["questionnaire"][q_idx] = questionnaire_answer
+    answers["questionnaire_reasons"] = questionnaire
     return answers

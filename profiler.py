@@ -15,6 +15,7 @@ app.config["DEBUG"] = True
 
 @app.route('/profile', methods=['POST'])
 def profile():
+    print('profile call')
     data = request.get_json() or {}
     comments = [x['comment'] for x in data['comments']]
     df = preprocess(data['experiment_id'], ' '.join(comments))
@@ -25,6 +26,7 @@ def profile():
 
 @app.route('/questionnaire', methods=['POST'])
 def fill_questionnaire():
+    print('fill questionnaire call')
     data = request.get_json() or {}
     comments = [x['comment'] for x in data['comments']]
     questionnaire = find_answers(comments)
