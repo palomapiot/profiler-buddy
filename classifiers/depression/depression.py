@@ -34,6 +34,9 @@ optimizer = optimization.create_optimizer(
     num_train_steps=NB_BATCHES_TRAIN,
     num_warmup_steps=WARMUP_STEPS)
 
+
+# TODO: use save_weights() load_weights() instead, to avoid the error with a long text
+
 bert_squad = load_model(DIR_PATH + '/bert_squad_model', compile=False)
 bert_squad.compile(optimizer, squad_loss_fn)
 

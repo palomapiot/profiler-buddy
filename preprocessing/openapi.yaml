@@ -1,0 +1,122 @@
+openapi: 3.0.2
+info:
+  title: 'Profiler Buddy'
+  version: '1.0.0'
+paths:
+  /profile:
+    post:
+      operationId: profile
+      description: Predicts demographic data based on the user feed.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comments'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemographicData'
+          description: ''
+      tags:
+      - Profile
+      
+  /questionnaire:
+    post:
+      operationId: questionnaire
+      description: Predicts the answers of Beck's depression inventory.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comments'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Questionnaire'
+          description: 'Beck depression inventory answers and contexts'
+      tags:
+      - Questionnaire
+
+components:
+  schemas:
+    Comments:
+      type: object
+      properties:
+        experiment_id:
+          type: string
+        comments:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date-time
+              text:
+                type: string
+            required:
+            - date
+            - text
+      required:
+        - comments
+    DemographicData:
+      type: object
+      properties:
+        gender:
+          type: string
+        age:
+          type: string
+    Questionnaire:
+      type: object
+      properties:
+        questionnaire:
+          type: object
+          properties:
+            q1:
+              type: string
+              example: '2'
+            q2:
+              type: string
+              example: '0'
+            q3:
+              type: string
+              example: '3'
+            q18:
+              type: string
+              example: '1b'
+            q19:
+              type: string
+              example: '2'
+            q20:
+              type: string
+              example: '3'
+            q21:
+              type: string
+              example: '1'
+        questionnaire_reasons:
+          type: object
+          properties:
+            q1:
+              $ref: '#/components/schemas/QuestionnaireReason'
+            q2:
+              $ref: '#/components/schemas/QuestionnaireReason'
+            q3:
+              $ref: '#/components/schemas/QuestionnaireReason'
+            q21:
+              $ref: '#/components/schemas/QuestionnaireReason'
+    QuestionnaireReason:
+      type: object
+      properties:
+        context: 
+          type: string
+          example: 'I just want it to stop so bad. I feel terrible all the time.'
+        score: 
+          type: string
+          example: '34872'
+      

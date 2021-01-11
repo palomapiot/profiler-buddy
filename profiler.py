@@ -15,7 +15,27 @@ app.config["DEBUG"] = True
 
 @app.route('/profile', methods=['POST'])
 def profile():
-    print('profile call')
+    """
+    Get demographic data from profile (automatic profiling)
+    ---
+    get:
+        summary: Get the demographic from user feed
+        description: Predicts demographic data based on the user feed
+        tags:
+          - Profile
+        operationId: profile
+        parameters:[]
+        requestBody:
+            content:
+            application/json:
+                schema:
+                $ref: '#/components/schemas/Comments'
+        responses:
+            '200':
+                description: Demographic profile
+                schema: 
+                    $ref: '#/components/schemas/DemographicData'
+    """
     data = request.get_json() or {}
     comments = [x['text'] for x in data['comments']]
     df = preprocess(data['experiment_id'], ' '.join(comments))
@@ -26,7 +46,27 @@ def profile():
 
 @app.route('/questionnaire', methods=['POST'])
 def fill_questionnaire():
-    print('fill questionnaire call')
+    """
+    Beck depression inventory automatic filling
+    ---
+    get:
+        summary: Fill Beck depression inventory from user feed
+        description: Predicts the answers of Beck's depression inventory
+        tags:
+          - Questionnaire
+        operationId: questionnaire
+        parameters: []
+        requestBody:
+            content:
+            application/json:
+                schema:
+                $ref: '#/components/schemas/Comments'
+        responses:
+            '200':
+                description: Beck depression inventory answers and contexts
+                schema: 
+                    $ref: '#/components/schemas/Questionnaire'
+    """
     data = request.get_json() or {}
     comments = [x['text'] for x in data['comments']]
     questionnaire = find_answers(comments)
