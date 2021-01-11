@@ -50,6 +50,7 @@ components:
       properties:
         experiment_id:
           type: string
+          example: 'profile32387'
         comments:
           type: array
           items:
@@ -60,6 +61,7 @@ components:
                 format: date-time
               text:
                 type: string
+                example: 'I'm so tired of just feel empty, lonely, worthless, stupid, and a million other terrible things. But I'm not bad enough to end it yet. I just want it to stop so bad. I feel terrible all the time. I just want it to go away. Over the past month or so I've been thinking about death and wanting to die a lot more than normally. Like all I feel like listening to is songs about death or other sad things. I also only really like reading sad things now, or looking at sad things. And ive always like had thoughts about wanting to die but like not super seriously I guess. I also think about if people would care or not. And lately I've been like seriously thinking about how I would do it and where and stuff, which is something I've never done before in the years I've been thinking about killing myself. Recently I feel like I hate existing more and more every single day. I feel like im just waiting around for it to end. I don't care about having goals, or dreams. I just want to get through the shittiness of existence. I don't have motivation or really care about anything anymore. I just want it to be over.'
             required:
             - date
             - text
