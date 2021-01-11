@@ -14,4 +14,4 @@ Clone the project and start the application with `python profiler.py`
 
 ## License
 
-GNU AGPL v3.0
+GNU GPLv3.0
