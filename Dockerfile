@@ -8,8 +8,6 @@ COPY ./requirements.txt /profiler/requirements.txt
 
 WORKDIR /profiler
 
-RUN pip install -U spacy
-RUN python -m spacy download en_core_web_lg
 RUN pip install -r requirements.txt 
 
 COPY . /profiler

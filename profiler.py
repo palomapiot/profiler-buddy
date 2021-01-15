@@ -17,27 +17,6 @@ app.config["DEBUG"] = True
 
 @app.route('/profile', methods=['POST'])
 def profile():
-    """
-    Get demographic data from profile (automatic profiling)
-    ---
-    get:
-        summary: Get the demographic from user feed
-        description: Predicts demographic data based on the user feed
-        tags:
-          - Profile
-        operationId: profile
-        parameters:[]
-        requestBody:
-            content:
-            application/json:
-                schema:
-                $ref: '#/components/schemas/Comments'
-        responses:
-            '200':
-                description: Demographic profile
-                schema: 
-                    $ref: '#/components/schemas/DemographicData'
-    """
     print('profile call')
     data = request.get_json() or {}
     comments = [x['text'] for x in data['comments']]
@@ -53,27 +32,6 @@ def profile():
 
 @app.route('/questionnaire', methods=['POST'])
 def fill_questionnaire():
-    """
-    Beck depression inventory automatic filling
-    ---
-    get:
-        summary: Fill Beck depression inventory from user feed
-        description: Predicts the answers of Beck's depression inventory
-        tags:
-          - Questionnaire
-        operationId: questionnaire
-        parameters: []
-        requestBody:
-            content:
-            application/json:
-                schema:
-                $ref: '#/components/schemas/Comments'
-        responses:
-            '200':
-                description: Beck depression inventory answers and contexts
-                schema: 
-                    $ref: '#/components/schemas/Questionnaire'
-    """
     print('fill questionnaire call')
     data = request.get_json() or {}
     comments = [x['text'] for x in data['comments']]
