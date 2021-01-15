@@ -2,18 +2,30 @@ import os
 import pandas as pd
 import emoji
 import re
+import numpy as np
+
 from emoji import UNICODE_EMOJI
 from ast import literal_eval
+from itertools import chain
 
 import spacy
 nlp = spacy.load('en_core_web_lg')
 spacy_stopwords = spacy.lang.en.stop_words.STOP_WORDS
 
 import nltk
-from nltk.tokenize import sent_tokenize, TweetTokenizer, casual_tokenize
+from nltk import pos_tag
+from nltk.tokenize import sent_tokenize, TweetTokenizer, casual_tokenize, word_tokenize
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.corpus import stopwords, wordnet
+from nltk.stem.wordnet import WordNetLemmatizer
+
 nltk.download('punkt')
 nltk.download('vader_lexicon')
+nltk.download('wordnet')
+nltk.download('stopwords')
+
+from gensim import corpora, models
+from gensim.models import Phrases
 
 import pyphen
 PYPHEN_DIC = pyphen.Pyphen(lang='en')
@@ -31,7 +43,7 @@ def cosine_similarity_sklearn(documents):
 all_pos_tags = ["NO_TAG", "ADJ", "ADP", "ADV","AUX", "CONJ","CCONJ","DET",
                       "INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM",
                       "VERB","X","EOL","SPACE"]
-pos_tags = sorted(all_pos_tags)
+pos_tags_sorted = sorted(all_pos_tags)
 
 def POS_tags(text):
     text = nlp(text)
@@ -169,10 +181,8 @@ def word_num_mean(text):
 def preprocess(author_id, comments):
     print('preprocessing data')
     data = pd.DataFrame([[author_id, comments]], columns=['author_id', 'text'], index=[0]) 
-    #print(data)
-    print(data.text)
+
     ### Emojis ###
-    print('Emojis')
     data['face_smiling'] = data['text'].apply(face_smiling)
     data['face_affection'] = data['text'].apply(face_affection)
     data['face_tongue'] = data['text'].apply(face_tongue)
@@ -184,11 +194,9 @@ def preprocess(author_id, comments):
     data['emoji_count'] = data['text'].apply(count_emoji)
 
     ### URLs / web links ###
-    print('URLs')
     data['url_count'] = data.text.apply(lambda x: len(re.findall('http\S+', x))/len(x))
 
     ### Hashtag ###
-    print('Hashtag')
     data['hash_count'] = data['text'].apply(lambda x: len(re.findall('[#]', x))/len(x))
 
     ### Semicolon ###
@@ -258,9 +266,85 @@ def preprocess(author_id, comments):
     data['cosine_similarity'] = cosine_similarity_sklearn(data['text'])
 
     pos = POS_tags(str(data['text']))
-    for i in range(len(pos_tags)):
-        data[pos_tags[i]] = pos[i]/len(data['text'])
-    return data
-    
+    for i in range(len(pos_tags_sorted)):
+        data[pos_tags_sorted[i]] = pos[i]/len(data['text'])
 
-# TODO: LDA topics
+    # lda
+    print('lda topics')
+    data = add_lda_topics(data)
+
+    return data
+
+def get_wordnet_pos(treebank_tag):
+
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return ''
+lemmatizer = WordNetLemmatizer()
+
+def topics_document_to_dataframe(topics_document, num_topics):
+    res = pd.DataFrame(columns=range(num_topics))
+    for topic_weight in topics_document:
+        res.loc[0, topic_weight[0]] = topic_weight[1]
+    return res
+
+def add_lda_topics(data):
+    # LDA Model
+    lda = models.LdaModel.load('classifiers/lda_model/lda_model')
+
+    # get tokens from text
+    corpus = data['text'].to_list()
+    data['sentences'] = data.text.map(sent_tokenize)
+    data['tokens_sentences'] = data['sentences'].map(lambda sentences: [word_tokenize(sentence) for sentence in sentences])
+    data['POS_tokens'] = data['tokens_sentences'].map(lambda tokens_sentences: [pos_tag(tokens) for tokens in tokens_sentences])
+    data['tokens_sentences_lemmatized'] = data['POS_tokens'].map(
+        lambda list_tokens_POS: [
+            [
+                lemmatizer.lemmatize(el[0], get_wordnet_pos(el[1])) 
+                if get_wordnet_pos(el[1]) != '' else el[0] for el in tokens_POS
+            ] 
+            for tokens_POS in list_tokens_POS
+        ]
+    )
+    stopwords_custom = ['[', ']', 'RT', '#', '@', ',', '.', '!', 'http', 'https']
+    my_stopwords = stopwords.words('English') + stopwords_custom
+    
+    data['tokens'] = data['tokens_sentences_lemmatized'].map(lambda sentences: list(chain.from_iterable(sentences)))
+    data['tokens'] = data['tokens'].map(lambda tokens: [token.lower() for token in tokens if token.isalpha() 
+                                                    and token.lower() not in my_stopwords and len(token)>1])
+
+    tokens = data['tokens'].tolist()
+    bigram_model = Phrases(tokens)
+    trigram_model = Phrases(bigram_model[tokens], min_count=1)
+    tokens = list(trigram_model[bigram_model[tokens]])
+
+    # create new_corpus
+    dictionary_LDA = corpora.Dictionary(tokens)
+    unseen_corpus = [dictionary_LDA.doc2bow(tok) for tok in tokens]
+
+    # run model on new_corpus
+    np.random.seed(123456)
+    num_topics = 20
+    lda_model = models.LdaModel(unseen_corpus, num_topics=num_topics, \
+                                    id2word=dictionary_LDA, \
+                                    passes=4, alpha=[0.01]*num_topics, \
+                                    eta=[0.01]*len(dictionary_LDA.keys()))
+
+    # get document topic and append to df
+    topics = [lda_model[unseen_corpus[i]] for i in range(len(data))]
+
+    # like TF-IDF, create a matrix of topic weighting, with documents as rows and topics as columns
+    document_topic = \
+    pd.concat([topics_document_to_dataframe(topics_document, num_topics=num_topics) for topics_document in topics]).reset_index(drop=True).fillna(0)
+
+    data = pd.concat([data, document_topic], axis=1, sort=False)
+    data = data.drop(['sentences', 'tokens_sentences', 'POS_tokens', 'tokens_sentences_lemmatized', 'tokens'], 1)
+    
+    return data

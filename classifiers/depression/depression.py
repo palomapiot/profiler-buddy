@@ -34,15 +34,12 @@ optimizer = optimization.create_optimizer(
     num_train_steps=NB_BATCHES_TRAIN,
     num_warmup_steps=WARMUP_STEPS)
 
-
-# TODO: use save_weights() load_weights() instead, to avoid the error with a long text
-
 bert_squad = load_model(DIR_PATH + '/bert_squad_model', compile=False)
 bert_squad.compile(optimizer, squad_loss_fn)
 
 ### Prediction Utils ###
 my_bert_layer = hub.KerasLayer(
-    "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+    "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/3",
     trainable=False)
 vocab_file = my_bert_layer.resolved_object.vocab_file.asset_path.numpy()
 do_lower_case = my_bert_layer.resolved_object.do_lower_case.numpy()
@@ -221,7 +218,7 @@ def find_answers(comments):
                 for j in range(i, len(end_logits_context)):
                     pair_scores[i, j] = start_logits_context[i] + end_logits_context[j]
             pair_scores_argmax = np.argmax(pair_scores)
-            # ensure that the conterxt is inside our context
+            # ensure that the context is inside our context
             if len(context_tok_to_word_id) > pair_scores_argmax // len(start_logits_context) and len(context_tok_to_word_id) > pair_scores_argmax % len(end_logits_context):
                 start_word_id = context_tok_to_word_id[pair_scores_argmax // len(start_logits_context)]
                 end_word_id = context_tok_to_word_id[pair_scores_argmax % len(end_logits_context)]
