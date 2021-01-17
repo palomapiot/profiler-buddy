@@ -1,5 +1,6 @@
 import numpy as np
 import os 
+import collections
 import tensorflow as tf
 import tensorflow_hub as hub
 from tensorflow.keras.models import load_model
@@ -155,7 +156,7 @@ questions = {
     3: '''Past Failure''',
     4: '''Do you enjoy things?''', # Loss of pleasure
     5: '''Guilty Feelings''', # Guilty Feelings
-    6: '''Punishment''', # Punishment Feelings
+    6: '''Do you feel you are being punished?''', # Punishment Feelings
     7: '''What do you think about yourself?''', # Self-Dislike -> both works
     8: '''Do you blame yourself?''', # Self-Criticalness
     9: '''Do you think of killing yourself?''', # Suicidal Thoughts or Wishes
@@ -202,42 +203,70 @@ def find_answers(comments):
         "questionnaire": {},
         "questionnaire_reasons": {}
     }
+
+    BestPrediction = collections.namedtuple(
+        "BestPrediction", ["predicted_answer", "marked_text"]
+    )
+
     for idx in range(1, 22):
         my_question = questions[idx]
+        predictions = ""
+        predictions_traceability = []
+        # TODO: check the tokens length and chunk when len(tokens) > 384
+        # for each comment, predict the answer
         for my_context in comments:
-            # creation
-            my_input_dict, my_context_words, context_tok_to_word_id, question_tok_len = create_input_dict(my_question, my_context)
-            # prediction
-            start_logits, end_logits = bert_squad(my_input_dict, training=False)
-            # remove the ids corresponding to the question and the ["SEP"] token
-            start_logits_context = start_logits.numpy()[0, question_tok_len+1:]
-            end_logits_context = end_logits.numpy()[0, question_tok_len+1:]
-            # interpretation
-            pair_scores = np.ones((len(start_logits_context), len(end_logits_context)))*(-1E10)
-            for i in range(len(start_logits_context-1)):
-                for j in range(i, len(end_logits_context)):
-                    pair_scores[i, j] = start_logits_context[i] + end_logits_context[j]
-            pair_scores_argmax = np.argmax(pair_scores)
-            # ensure that the context is inside our context
-            if len(context_tok_to_word_id) > pair_scores_argmax // len(start_logits_context) and len(context_tok_to_word_id) > pair_scores_argmax % len(end_logits_context):
-                start_word_id = context_tok_to_word_id[pair_scores_argmax // len(start_logits_context)]
-                end_word_id = context_tok_to_word_id[pair_scores_argmax % len(end_logits_context)]
-            else:
-                start_word_id = 0
-                end_word_id = 0
-            # answer context
-            predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
-            marked_text = str(my_context.replace(predicted_answer, f"<strong>{predicted_answer}</strong>"))
-            # set the higher pair_scores_argmax to question
-            questionnaire = answers["questionnaire_reasons"]
-            q_idx = 'q' + str(idx)
-            if q_idx not in questionnaire.keys() or pair_scores_argmax > int(questionnaire[q_idx]["score"]):
-                questionnaire[q_idx] = {"context": marked_text, "score": str(pair_scores_argmax)}
-        # get most similar answer
+            predicted_answer, marked_text = squad_prediction(my_question, my_context)
+            predictions = predictions + " " + predicted_answer
+            predictions_traceability.append(
+                BestPrediction(
+                    predicted_answer=predicted_answer, 
+                    marked_text=marked_text
+                )
+            )
+        # find best answer among all predictions
+        best_predicted_answer, best_marked_text = squad_prediction(my_question, predictions, predictions_traceability)
+
+        # set best answer         
+        questionnaire = answers["questionnaire_reasons"]
+        q_idx = 'q' + str(idx)
+        questionnaire[q_idx] = {"context": best_marked_text}
+
+        # get most similar beck inventory answer
         is_special = False
         if idx == 16 or idx == 18:
             is_special = True
-        questionnaire_answer = find_best_answer(predicted_answer, questions_answers[idx], is_special)
+        questionnaire_answer = find_best_answer(best_predicted_answer, questions_answers[idx], is_special)
         answers["questionnaire"][q_idx] = questionnaire_answer
     answers["questionnaire_reasons"] = questionnaire
     return answers
+
+def squad_prediction(my_question, my_context, traceability=None):
+    # creation
+    my_input_dict, my_context_words, context_tok_to_word_id, question_tok_len = create_input_dict(my_question, my_context)
+    # prediction
+    start_logits, end_logits = bert_squad(my_input_dict, training=False)
+    # remove the ids corresponding to the question and the ["SEP"] token
+    start_logits_context = start_logits.numpy()[0, question_tok_len+1:]
+    end_logits_context = end_logits.numpy()[0, question_tok_len+1:]
+    # interpretation
+    pair_scores = np.ones((len(start_logits_context), len(end_logits_context)))*(-1E10)
+    for i in range(len(start_logits_context-1)):
+        for j in range(i, len(end_logits_context)):
+            pair_scores[i, j] = start_logits_context[i] + end_logits_context[j]
+    pair_scores_argmax = np.argmax(pair_scores)
+    # ensure that the context is inside our context
+    if len(context_tok_to_word_id) > pair_scores_argmax // len(start_logits_context) and len(context_tok_to_word_id) > pair_scores_argmax % len(end_logits_context):
+        start_word_id = context_tok_to_word_id[pair_scores_argmax // len(start_logits_context)]
+        end_word_id = context_tok_to_word_id[pair_scores_argmax % len(end_logits_context)]
+    else:
+        start_word_id = 0
+        end_word_id = 0
+    # answer context
+    predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
+    marked_text = str(my_context.replace(predicted_answer, f"<strong>{predicted_answer}</strong>"))
+    if traceability != None:
+        for context in traceability:
+            if predicted_answer in context.marked_text:
+                marked_text = context.marked_text
+                break
+    return predicted_answer, marked_text

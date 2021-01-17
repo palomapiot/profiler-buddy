@@ -28,7 +28,7 @@ def profile():
         gender = 'Male'
     else:
         gender = 'Female'
-    return jsonify( {'gender': gender, 'score': str(gender_score[0]) } )
+    return jsonify( {'gender': gender, 'gender_score': str(gender_score[0]) } )
 
 @app.route('/questionnaire', methods=['POST'])
 def fill_questionnaire():
