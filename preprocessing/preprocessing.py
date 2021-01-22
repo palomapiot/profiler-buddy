@@ -22,7 +22,7 @@ from nltk.stem.wordnet import WordNetLemmatizer
 nltk.download('punkt')
 nltk.download('vader_lexicon')
 nltk.download('wordnet')
-nltk.download('stopwords')
+nltk.download('averaged_perceptron_tagger')
 
 from gensim import corpora, models
 from gensim.models import Phrases
@@ -314,7 +314,7 @@ def add_lda_topics(data):
         ]
     )
     stopwords_custom = ['[', ']', 'RT', '#', '@', ',', '.', '!', 'http', 'https']
-    my_stopwords = stopwords.words('English') + stopwords_custom
+    my_stopwords = list(spacy_stopwords) + stopwords_custom
     
     data['tokens'] = data['tokens_sentences_lemmatized'].map(lambda sentences: list(chain.from_iterable(sentences)))
     data['tokens'] = data['tokens'].map(lambda tokens: [token.lower() for token in tokens if token.isalpha() 
