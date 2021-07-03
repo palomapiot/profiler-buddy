@@ -43,6 +43,26 @@ paths:
       tags:
       - Questionnaire
 
+  /qa:
+    post:
+      operationId: question_answering
+      description: Predicts the answer of given question in the context.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comments'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Questionnaire'
+          description: 'Beck depression inventory answers and contexts'
+      tags:
+      - QuestionAnswering
+
 components:
   schemas:
     Comments:

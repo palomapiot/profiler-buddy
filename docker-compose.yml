@@ -8,6 +8,28 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
+    links:
+      - redis
+    depends_on:
+      - redis
   deploy:
     container_name: profiler-buddy-deploy
     build: .
+  redis:
+    image: redis
+    container_name: redis
+    hostname: redis
+    ports:
+      - "6379:6379"
+  celery:
+    container_name: celery
+    build: .
+    command: celery worker -A app -l info
+    volumes:
+      - ./app:/app
+    links:
+      - web
+      - db
+      - redis
+    depends_on: 
+      - redis

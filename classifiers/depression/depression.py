@@ -4,7 +4,7 @@ import collections
 import tensorflow as tf
 import tensorflow_hub as hub
 from tensorflow.keras.models import load_model
-
+from operator import attrgetter
 from official.nlp import optimization
 from official.nlp.bert.tokenization import FullTokenizer
 from pyemd import emd
@@ -15,6 +15,10 @@ DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 NB_BATCHES_TRAIN = 2000
 INIT_LR = 5e-5 # initial learning rate
 WARMUP_STEPS = int(NB_BATCHES_TRAIN * 0.1) 
+
+BestPrediction = collections.namedtuple(
+    "BestPrediction", ["predicted_answer", "marked_text", "score_index"]
+)
 
 def squad_loss_fn(labels, model_outputs):
     start_positions = labels['start_positions']
@@ -164,13 +168,13 @@ questions = {
     11: '''Are you restless?''', # Agitation
     12: '''Have you lost interest?''', # Loss of Interest
     13: '''Are you indecisive?''', # Indecisiveness
-    14: '''Are you wothless?''', # Worthlessness --------
+    14: '''Are you worthless?''', # Worthlessness
     15: '''Do you have energy?''', # Loss of Energy
     16: '''How is your sleep?''', # Changes in Sleeping Pattern
     17: '''Are you irritable?''', # Irritability
     18: '''How is your appetite?''', # Changes in Appetite
     19: '''Can you concentrate?''', # Concentration Difficulty
-    20: '''Are you tired?''', # Tiredness or Fatigue --------
+    20: '''Are you tired?''', # Tiredness or Fatigue
     21: '''Are you interested in sex?''' # Loss of Interest in Sex
 }
 
@@ -203,39 +207,46 @@ def find_answers(comments):
         "questionnaire": {},
         "questionnaire_reasons": {}
     }
-
-    BestPrediction = collections.namedtuple(
-        "BestPrediction", ["predicted_answer", "marked_text"]
-    )
-
+    questionnaire = {}
     for idx in range(1, 22):
         my_question = questions[idx]
-        predictions = ""
+        print(my_question)
+        #max_index = -10000
         predictions_traceability = []
-        # TODO: check the tokens length and chunk when len(tokens) > 384
+        """best_prediction = BestPrediction(
+            predicted_answer="", 
+            marked_text="", 
+            score_index=max_index
+        )"""
         # for each comment, predict the answer
         for my_context in comments:
-            predicted_answer, marked_text = squad_prediction(my_question, my_context)
-            predictions = predictions + " " + predicted_answer
+            print(len(my_context))
+            predicted_answer, marked_text, score_index = squad_prediction(my_question, my_context)
             predictions_traceability.append(
                 BestPrediction(
                     predicted_answer=predicted_answer, 
-                    marked_text=marked_text
+                    marked_text=marked_text, 
+                    score_index=score_index.numpy()
                 )
             )
+            """if score_index.numpy() > max_index:
+                max_index = score_index.numpy()
+                best_prediction = BestPrediction(
+                    predicted_answer=predicted_answer, 
+                    marked_text=marked_text, 
+                    score_index=score_index.numpy()
+                )"""
         # find best answer among all predictions
-        best_predicted_answer, best_marked_text = squad_prediction(my_question, predictions, predictions_traceability)
-
+        best_prediction = max(predictions_traceability, key=attrgetter('score_index'))
         # set best answer         
-        questionnaire = answers["questionnaire_reasons"]
         q_idx = 'q' + str(idx)
-        questionnaire[q_idx] = {"context": best_marked_text}
+        questionnaire[q_idx] = {"context": best_prediction.marked_text, "score": str(best_prediction.score_index)}
 
         # get most similar beck inventory answer
         is_special = False
         if idx == 16 or idx == 18:
             is_special = True
-        questionnaire_answer = find_best_answer(best_predicted_answer, questions_answers[idx], is_special)
+        questionnaire_answer = find_best_answer(best_prediction.predicted_answer, questions_answers[idx], is_special)
         answers["questionnaire"][q_idx] = questionnaire_answer
     answers["questionnaire_reasons"] = questionnaire
     return answers
@@ -248,6 +259,8 @@ def squad_prediction(my_question, my_context, traceability=None):
     # remove the ids corresponding to the question and the ["SEP"] token
     start_logits_context = start_logits.numpy()[0, question_tok_len+1:]
     end_logits_context = end_logits.numpy()[0, question_tok_len+1:]
+    # index score
+    index_score = start_logits[0, 0] + end_logits[0, 0]
     # interpretation
     pair_scores = np.ones((len(start_logits_context), len(end_logits_context)))*(-1E10)
     for i in range(len(start_logits_context-1)):
@@ -264,9 +277,20 @@ def squad_prediction(my_question, my_context, traceability=None):
     # answer context
     predicted_answer = ' '.join(my_context_words[start_word_id:end_word_id+1])
     marked_text = str(my_context.replace(predicted_answer, f"<strong>{predicted_answer}</strong>"))
-    if traceability != None:
-        for context in traceability:
-            if predicted_answer in context.marked_text:
-                marked_text = context.marked_text
-                break
-    return predicted_answer, marked_text
+    return predicted_answer, marked_text, index_score
+
+
+def find_answers_for_question(question, contexts):
+    predictions_traceability = []
+    for context in contexts:
+        predicted_answer, marked_text, score_index = squad_prediction(question, context)
+        predictions_traceability.append(
+            BestPrediction(
+                predicted_answer=predicted_answer, 
+                marked_text=marked_text, 
+                score_index=score_index.numpy()
+            )
+        )
+    # find best answer among all predictions
+    best_prediction = max(predictions_traceability, key=attrgetter('score_index'))
+    return best_prediction.predicted_answer
