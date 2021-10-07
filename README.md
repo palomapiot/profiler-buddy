@@ -65,9 +65,9 @@ Clone the project and start the application with `python profiler.py` or run as 
 
 ## Useful links
 
-- Google developer group: https://groups.google.com/u/1/g/early-dev
-- Beck Depression Inventory: https://www.ismanet.org/doctoryourspirit/pdfs/Beck-Depression-Inventory-BDI.pdf
-- Gender classification paper: https://www.scitepress.org/Link.aspx?doi=10.5220/0010431901030113
+- Google developer group: [External link](https://groups.google.com/u/1/g/early-dev)
+- Beck Depression Inventory: [External link](https://www.ismanet.org/doctoryourspirit/pdfs/Beck-Depression-Inventory-BDI.pdf)
+- [Gender classification paper](https://github.com/palomapiot/profiler-buddy/blob/develop/Paper.pdf): [External link](https://www.scitepress.org/Link.aspx?doi=10.5220/0010431901030113)
 
 ## License
 
