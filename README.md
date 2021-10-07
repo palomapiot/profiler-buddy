@@ -16,6 +16,11 @@ This work is licensed under a
 
 Profiler Buddy is a service for automatic profiling of social media users from the analysis of unstructured data. It allows you to predict the demographic data from the user's feed and it automatically fills Beck Depression Inventory, based on the user's post history.
 
+## Documentation
+
+- [Thesis documentation](https://github.com/palomapiot/profiler-buddy/blob/develop/_TFM__Memoria.pdf)
+- [Gender classification paper](https://github.com/palomapiot/profiler-buddy/blob/develop/Paper.pdf)
+
 ## Features
 
 Input data: list of user social posts (natural language texts)
