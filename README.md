@@ -20,6 +20,7 @@ Profiler Buddy is a service for automatic profiling of social media users from t
 
 - [Thesis documentation](https://github.com/palomapiot/profiler-buddy/blob/develop/_TFM__Memoria.pdf)
 - [Gender classification paper](https://github.com/palomapiot/profiler-buddy/blob/develop/Paper.pdf)
+- [Open-Source Technical documentation](https://github.com/palomapiot/profiler-buddy/blob/develop/_TFM__Premio_Software_Libre_21.pdf)
 
 ## Features
 
